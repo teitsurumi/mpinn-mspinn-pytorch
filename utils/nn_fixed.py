@@ -11,10 +11,10 @@ from torch import nn
 
 torch.random.manual_seed(12345)
 
-class SinActivation(nn.Module):
+class SineActivation(nn.Module):
     """`sin`"""
     def __init__(self):
-        super(SinActivation, self).__init__()
+        super(SineActivation, self).__init__()
     
     def forward(self, x):
         return torch.sin(x)
@@ -37,7 +37,7 @@ class Functional(nn.Module):
             'relu': nn.ReLU,
             'tanh': nn.Tanh,
             'prelu': nn.PReLU,
-            'sin': SinActivation
+            'sin': SineActivation
         }
         if activation not in activations:
             raise ValueError(f"Activation '{activation}' is not supported")
