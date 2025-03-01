@@ -11,19 +11,21 @@ A PyTorch implementation of mPINN &amp; MsPINN
 
 ## Clone
 
-Clone the `main` branch **(code only)**:
+Choose somewhere safe to store the code, then clone the `main` branch **(code only)**:
 
 ```sh
 git clone -b main https://github.com/teitsurumi/mpinn-mspinn-pytorch.git
+cd mpinn-mspinn-pytorch
 ```
 
 If the raw dataset is needed, please clone the `data` branch (about 18.1 M):
 
 ```sh
-cd mpinn-mspinn-pytorch
 git fetch origin data
 git checkout origin/data -- data_thermoelastic
 ```
+
+(Another dataset containing 110,323 nodes is too large to include here; it will be made available upon request.)
 
 After downloading both branches, your project directory should look like this:
 
@@ -48,7 +50,7 @@ mpinn-mspinn-pytorch/
 - h5py 3.13.0
 - pandas 2.2.3
 
-`requirements.txt` will not be offered. Please install the PyTorch version https://pytorch.org/ accordingly.
+The `requirements.txt` file is not provided here due to varying CUDA support. Please install the appropriate version of PyTorch from https://pytorch.org/ based on your system configuration.
 
 ---
 
