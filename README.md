@@ -48,7 +48,7 @@ mpinn-mspinn-pytorch/
 - h5py 3.13.0
 - pandas 2.2.3
 
-`requirements.txt` will not be offered. Please install the correct PyTorch version.
+`requirements.txt` will not be offered. Please install the correct PyTorch version https://pytorch.org/.
 
 ---
 
@@ -68,7 +68,7 @@ Compared to the mPINN framework, which introduces correction terms (`_O` terms) 
 We provide a PyTorch implementation with enhanced computational efficiency:
 - Reorganized code structure
   - Streamlined configuration, sampling, and dataset handling
-- Improved sampling & masking strategy
+- Improved sampling & masking strategy (`test22`)
   - Replaced random sampling with Latin Hypercube Sampling (LHS) for more uniform and representative point distribution
   - Implemented mask generation using logical computations
   - for better readability :)

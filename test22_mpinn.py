@@ -64,7 +64,8 @@ class Config:
     iters: int = 25000
     loss_terms: List[str] = [
         'Total_loss', 'Work_m', 'BC1_m', 'BC2_m', 'BC3_m', 'BC4_m', 'BC5_m', 'BC6_m', 'BC7_m', 'BC8_m', 'BC9_m', 'BC10_m', 'BC11_m', 'BC12_m', 
-        'Work_t', 'BC1_t', 'BC2_t', 'BC3_t', 'BC4_t'
+        'PDE1_m', 'PDE2_m', 'PDE3_m', 'EQ1_m', 'EQ2_m', 'EQ3_m', 'EQ4_m', 'EQ5_m', 'EQ6_m',
+        'Work_t', 'BC1_t', 'BC2_t', 'BC3_t', 'BC4_t', 'PDE1_t', 'EQ1_t', 'EQ2_t', 'EQ3_t'
     ]
 cfg = Config()
 
@@ -275,6 +276,9 @@ class TrainingUtils(nn.Module):
     def func1(self, x, y, z, E, K):
         X = torch.hstack((x, y, z))
         Tn = self.Tn(X)
+        q_x_O = self.q_x_O(X)
+        q_y_O = self.q_y_O(X)
+        q_z_O = self.q_z_O(X)
         T = Tn * x * (x - 1.0) + 1.0 - x
         gr_T_x = gradients(T, x)[0]
         gr_T_y = gradients(T, y)[0]
@@ -286,6 +290,12 @@ class TrainingUtils(nn.Module):
         u_xn = self.u_xn(X)
         u_yn = self.u_yn(X)
         u_zn = self.u_zn(X)
+        sig_x_O = self.sig_x_O(X)
+        sig_y_O = self.sig_y_O(X)
+        sig_z_O = self.sig_z_O(X)
+        sig_xy_O = self.sig_xy_O(X)
+        sig_yz_O = self.sig_yz_O(X)
+        sig_xz_O = self.sig_xz_O(X)
         u_x = u_xn * x * (x - 1.0)
         u_y = u_yn * y * (y - 1.0)
         u_z = u_zn * z * (z - 1.0)
@@ -305,9 +315,20 @@ class TrainingUtils(nn.Module):
         sigma_yz  = (E/(1+nu)) * strain_yz
         sigma_xz  = (E/(1+nu)) * strain_xz
         
+        # mPINN 由 _O 修正项构建的平衡方程，以及直接拟合
+        PDE1_m = gradients(sig_x_O, x)[0] + gradients(sig_xy_O, y)[0] + gradients(sig_xz_O, z)[0]
+        PDE2_m = gradients(sig_y_O, y)[0] + gradients(sig_xy_O, x)[0] + gradients(sig_yz_O, z)[0]
+        PDE3_m = gradients(sig_z_O, z)[0] + gradients(sig_xz_O, x)[0] + gradients(sig_yz_O, y)[0]
+        EQ1_m  = sig_x_O  - sigma_x
+        EQ2_m  = sig_y_O  - sigma_y
+        EQ3_m  = sig_z_O  - sigma_z
+        EQ4_m  = sig_xy_O - sigma_xy
+        EQ5_m  = sig_yz_O - sigma_yz
+        EQ6_m  = sig_xz_O - sigma_xz
+        
         ###################################### CONSTRUCT LOSS TERMS ######################################
         ################################# Mechanical Governing Equation #################################
-        Work_int_m = torch.sum(self.M_domain * (sigma_x*strain_x + sigma_y*strain_y + sigma_z*strain_z + 2*sigma_xy*strain_xy + 2*sigma_yz*strain_yz + 2*sigma_xz*strain_xz))/(2*self.nd)
+        Work_int_m = torch.sum(self.M_domain * (sigma_x*strain_x + sigma_y*strain_y + sigma_z*strain_z + 2*sigma_xy*strain_xy + 2*sigma_yz*strain_yz + 2*sigma_xz*strain_xz)) / (2*self.nd)
         Work_e_l_m = torch.sum(self.M_bound_left*(sigma_x * u_x + sigma_xy * u_y + sigma_xz * u_z))/self.nb_l
         Work_e_r_m = torch.sum(self.M_bound_right*(-sigma_x * u_x - sigma_xy * u_y - sigma_xz * u_z))/self.nb_r
         Work_e_f_m = torch.sum(self.M_bound_front*(sigma_y * u_y + sigma_xy * u_x + sigma_yz * u_z))/self.nb_f
@@ -317,13 +338,19 @@ class TrainingUtils(nn.Module):
         Work_ext_m = Work_e_l_m + Work_e_r_m + Work_e_f_m + Work_e_bh_m + Work_e_t_m + Work_e_bt_m
         Work_m = torch.square(Work_int_m - Work_ext_m)
         
+        # Mechanical BCs 忽略前面的硬约束
         BC1_m = self.M_bound_left*sigma_xy; BC2_m = self.M_bound_left*sigma_xz
         BC3_m = self.M_bound_right*sigma_xy; BC4_m = self.M_bound_right*sigma_xz
         BC5_m = self.M_bound_front*sigma_xy; BC6_m = self.M_bound_front*sigma_yz
         BC7_m = self.M_bound_behind*sigma_xy; BC8_m = self.M_bound_behind*sigma_yz
         BC9_m = self.M_bound_bottom*sigma_yz; BC10_m = self.M_bound_bottom*sigma_xz
         BC11_m = self.M_bound_top*sigma_yz; BC12_m = self.M_bound_top*sigma_xz
-
+        
+        PDE1_t = gradients(q_x_O, x)[0] + gradients(q_y_O, y)[0] + gradients(q_z_O, z)[0]
+        EQ1_t  = q_x_O - q_x
+        EQ2_t  = q_y_O - q_y
+        EQ3_t  = q_z_O - q_z
+        
         ################################## Thermal Governing Equation ##################################
         Work_int_t = torch.sum(self.M_domain * (q_x*gr_T_x + q_y*gr_T_y + q_z*gr_T_z))/self.nd
         Work_e_l_t = torch.sum(self.M_bound_left * (-q_x * T))/self.nb_l
@@ -333,10 +360,14 @@ class TrainingUtils(nn.Module):
         BC3_t = self.M_bound_bottom*q_z; BC4_t = self.M_bound_top*q_z
         
         return Work_m, BC1_m, BC2_m, BC3_m, BC4_m, BC5_m, BC6_m, BC7_m, BC8_m, BC9_m, BC10_m, BC11_m, BC12_m, \
-            Work_t, BC1_t, BC2_t, BC3_t, BC4_t
+            PDE1_m, PDE2_m, PDE3_m, EQ1_m, EQ2_m, EQ3_m, EQ4_m, EQ5_m, EQ6_m, \
+            Work_t, BC1_t, BC2_t, BC3_t, BC4_t, PDE1_t, EQ1_t, EQ2_t, EQ3_t
     def func1_FE(self, x, y, z, E, K):
         X = torch.hstack((x, y, z))
         Tn = self.Tn(X)
+        # q_x_O = self.q_x_O(X)
+        # q_y_O = self.q_y_O(X)
+        # q_z_O = self.q_z_O(X)
         T = Tn * x * (x - 1.0) + 1.0 - x
         gr_T_x = gradients(T, x)[0]
         gr_T_y = gradients(T, y)[0]
@@ -348,6 +379,12 @@ class TrainingUtils(nn.Module):
         u_xn = self.u_xn(X)
         u_yn = self.u_yn(X)
         u_zn = self.u_zn(X)
+        # sig_x_O = self.sig_x_O(X)
+        # sig_y_O = self.sig_y_O(X)
+        # sig_z_O = self.sig_z_O(X)
+        # sig_xy_O = self.sig_xy_O(X)
+        # sig_yz_O = self.sig_yz_O(X)
+        # sig_xz_O = self.sig_xz_O(X)
         u_x = u_xn * x * (x - 1.0)
         u_y = u_yn * y * (y - 1.0)
         u_z = u_zn * z * (z - 1.0)
@@ -374,7 +411,9 @@ class TrainingUtils(nn.Module):
         for i in range(self.cfg.iters):
             optimizer.zero_grad()
             Work_m, BC1_m, BC2_m, BC3_m, BC4_m, BC5_m, BC6_m, BC7_m, BC8_m, BC9_m, BC10_m, BC11_m, BC12_m, \
-                Work_t, BC1_t, BC2_t, BC3_t, BC4_t = self.func1(self.x_train, self.y_train, self.z_train, self.E, self.K)
+                PDE1_m, PDE2_m, PDE3_m, EQ1_m, EQ2_m, EQ3_m, EQ4_m, EQ5_m, EQ6_m, \
+                Work_t, BC1_t, BC2_t, BC3_t, BC4_t, PDE1_t, EQ1_t, EQ2_t, EQ3_t = self.func1(self.x_train, self.y_train, self.z_train, self.E, self.K)
+            # FE Loss
             u_x_FE_, u_y_FE_, u_z_FE_, sigma_x_FE_, sigma_y_FE_, sigma_z_FE_, sigma_xy_FE_, sigma_yz_FE_, sigma_xz_FE_, \
                 T_FE_, q_x_FE_, q_y_FE_, q_z_FE_ = self.func1_FE(self.x_fem, self.y_fem, self.z_fem, self.E_FE, self.K_FE)
             # FE Loss
@@ -394,58 +433,48 @@ class TrainingUtils(nn.Module):
             # Eq Loss
             """loss_terms: List[str] = [
                 'Total_loss', 'Work_m', 'BC1_m', 'BC2_m', 'BC3_m', 'BC4_m', 'BC5_m', 'BC6_m', 'BC7_m', 'BC8_m', 'BC9_m', 'BC10_m', 'BC11_m', 'BC12_m', 
-                'Work_t', 'BC1_t', 'BC2_t', 'BC3_t', 'BC4_t'
+                'PDE1_m', 'PDE2_m', 'PDE3_m', 'EQ1_m', 'EQ2_m', 'EQ3_m', 'EQ4_m', 'EQ5_m', 'EQ6_m',
+                'Work_t', 'BC1_t', 'BC2_t', 'BC3_t', 'BC4_t', 'PDE1_t', 'EQ1_t', 'EQ2_t', 'EQ3_t'
             ]"""
-            ls_Work_m = Work_m;                           self.history[1, i]  = ls_Work_m.item()
-            ls_BC1_m  = torch.mean(torch.square(BC1_m));  self.history[2, i]  = ls_BC1_m.item()
-            ls_BC2_m  = torch.mean(torch.square(BC2_m));  self.history[3, i]  = ls_BC2_m.item()
-            ls_BC3_m  = torch.mean(torch.square(BC3_m));  self.history[4, i]  = ls_BC3_m.item()
-            ls_BC4_m  = torch.mean(torch.square(BC4_m));  self.history[5, i]  = ls_BC4_m.item()
-            ls_BC5_m  = torch.mean(torch.square(BC5_m));  self.history[6, i]  = ls_BC5_m.item()
-            ls_BC6_m  = torch.mean(torch.square(BC6_m));  self.history[7, i]  = ls_BC6_m.item()
-            ls_BC7_m  = torch.mean(torch.square(BC7_m));  self.history[8, i]  = ls_BC7_m.item()
-            ls_BC8_m  = torch.mean(torch.square(BC8_m));  self.history[9, i]  = ls_BC8_m.item()
-            ls_BC9_m  = torch.mean(torch.square(BC9_m));  self.history[10, i] = ls_BC9_m.item()
-            ls_BC10_m = torch.mean(torch.square(BC10_m)); self.history[11, i] = ls_BC10_m.item()
-            ls_BC11_m = torch.mean(torch.square(BC11_m)); self.history[12, i] = ls_BC11_m.item()
-            ls_BC12_m = torch.mean(torch.square(BC12_m)); self.history[13, i] = ls_BC12_m.item()
-            ls_Work_t = Work_t;                           self.history[14, i] = ls_Work_t.item()
-            ls_BC1_t = torch.mean(torch.square(BC1_t));   self.history[15, i] = ls_BC1_t.item()
-            ls_BC2_t = torch.mean(torch.square(BC2_t));   self.history[16, i] = ls_BC2_t.item()
-            ls_BC3_t = torch.mean(torch.square(BC3_t));   self.history[17, i] = ls_BC3_t.item()
-            ls_BC4_t = torch.mean(torch.square(BC4_t));   self.history[18, i] = ls_BC4_t.item()
-            
-            if i <= 1000:
-                Loss = ls_Work_m + ls_BC1_m + ls_BC2_m + ls_BC3_m + ls_BC4_m + ls_BC5_m + ls_BC6_m + ls_BC7_m + ls_BC8_m + ls_BC9_m + ls_BC10_m + ls_BC11_m + ls_BC12_m + \
-                    ls_Work_t + ls_BC1_t + ls_BC2_t + ls_BC3_t + ls_BC4_t + \
-                    ls_u_x_FE + ls_u_y_FE + ls_u_z_FE + ls_sigma_x_FE + ls_sigma_y_FE + ls_sigma_z_FE + ls_sigma_xy_FE + ls_sigma_yz_FE + ls_sigma_xz_FE + ls_T_FE + ls_q_x_FE + ls_q_y_FE + ls_q_z_FE
-            elif i <= 6000:
-                Loss = ls_u_x_FE + ls_u_y_FE + ls_u_z_FE + ls_sigma_x_FE + ls_sigma_y_FE + ls_sigma_z_FE + ls_sigma_xy_FE + ls_sigma_yz_FE + ls_sigma_xz_FE + ls_T_FE + ls_q_x_FE + ls_q_y_FE + ls_q_z_FE
-            elif i <= 10000:
-                Loss = ls_Work_m + ls_BC1_m + ls_BC2_m + ls_BC3_m + ls_BC4_m + ls_BC5_m + ls_BC6_m + ls_BC7_m + ls_BC8_m + ls_BC9_m + ls_BC10_m + ls_BC11_m + ls_BC12_m + \
-                    ls_Work_t + ls_BC1_t + ls_BC2_t + ls_BC3_t + ls_BC4_t + \
-                    ls_u_x_FE + ls_u_y_FE + ls_u_z_FE + ls_sigma_x_FE + ls_sigma_y_FE + ls_sigma_z_FE + ls_sigma_xy_FE + ls_sigma_yz_FE + ls_sigma_xz_FE + ls_T_FE + ls_q_x_FE + ls_q_y_FE + ls_q_z_FE
-            elif i <= 14000:
-                if i == 10000+1:
-                    new_lr = 5e-4
-                    for param_group in optimizer.param_groups:
-                        param_group['lr'] = new_lr
-                Loss = ls_u_x_FE + ls_u_y_FE + ls_u_z_FE + ls_sigma_x_FE + ls_sigma_y_FE + ls_sigma_z_FE + ls_sigma_xy_FE + ls_sigma_yz_FE + ls_sigma_xz_FE + ls_T_FE + ls_q_x_FE + ls_q_y_FE + ls_q_z_FE
-            else:
-                if i == 16000+1:
-                    new_lr = 6e-4
-                    for param_group in optimizer.param_groups:
-                        param_group['lr'] = new_lr
-                if i == 22000+1:
-                    new_lr = 1e-4
-                    for param_group in optimizer.param_groups:
-                        param_group['lr'] = new_lr
-                Loss = ls_Work_m + ls_BC1_m + ls_BC2_m + ls_BC3_m + ls_BC4_m + ls_BC5_m + ls_BC6_m + ls_BC7_m + ls_BC8_m + ls_BC9_m + ls_BC10_m + ls_BC11_m + ls_BC12_m + \
-                    ls_Work_t + ls_BC1_t + ls_BC2_t + ls_BC3_t + ls_BC4_t + \
-                    ls_u_x_FE + ls_u_y_FE + ls_u_z_FE + ls_sigma_x_FE + ls_sigma_y_FE + ls_sigma_z_FE + ls_sigma_xy_FE + ls_sigma_yz_FE + ls_sigma_xz_FE + ls_T_FE + ls_q_x_FE + ls_q_y_FE + ls_q_z_FE
+            ls_Work_m = Work_m;                           self.history[1, i]   = ls_Work_m.item()
+            ls_BC1_m  = torch.mean(torch.square(BC1_m));  self.history[2, i]   = ls_BC1_m.item()
+            ls_BC2_m  = torch.mean(torch.square(BC2_m));  self.history[3, i]   = ls_BC2_m.item()
+            ls_BC3_m  = torch.mean(torch.square(BC3_m));  self.history[4, i]   = ls_BC3_m.item()
+            ls_BC4_m  = torch.mean(torch.square(BC4_m));  self.history[5, i]   = ls_BC4_m.item()
+            ls_BC5_m  = torch.mean(torch.square(BC5_m));  self.history[6, i]   = ls_BC5_m.item()
+            ls_BC6_m  = torch.mean(torch.square(BC6_m));  self.history[7, i]   = ls_BC6_m.item()
+            ls_BC7_m  = torch.mean(torch.square(BC7_m));  self.history[8, i]   = ls_BC7_m.item()
+            ls_BC8_m  = torch.mean(torch.square(BC8_m));  self.history[9, i]   = ls_BC8_m.item()
+            ls_BC9_m  = torch.mean(torch.square(BC9_m));  self.history[10, i]  = ls_BC9_m.item()
+            ls_BC10_m = torch.mean(torch.square(BC10_m)); self.history[11, i]  = ls_BC10_m.item()
+            ls_BC11_m = torch.mean(torch.square(BC11_m)); self.history[12, i]  = ls_BC11_m.item()
+            ls_BC12_m = torch.mean(torch.square(BC12_m)); self.history[13, i]  = ls_BC12_m.item()
+            ls_PDE1_m = torch.mean(torch.square(PDE1_m)); self.history[14, i]  = ls_PDE1_m.item()
+            ls_PDE2_m = torch.mean(torch.square(PDE2_m)); self.history[15, i]  = ls_PDE2_m.item()
+            ls_PDE3_m = torch.mean(torch.square(PDE3_m)); self.history[16, i]  = ls_PDE3_m.item()
+            ls_EQ1_m  = torch.mean(torch.square(EQ1_m));  self.history[17, i]  = ls_EQ1_m.item()
+            ls_EQ2_m  = torch.mean(torch.square(EQ2_m));  self.history[18, i]  = ls_EQ2_m.item()
+            ls_EQ3_m  = torch.mean(torch.square(EQ3_m));  self.history[19, i]  = ls_EQ3_m.item()
+            ls_EQ4_m  = torch.mean(torch.square(EQ4_m));  self.history[20, i]  = ls_EQ4_m.item()
+            ls_EQ5_m  = torch.mean(torch.square(EQ5_m));  self.history[21, i]  = ls_EQ5_m.item()
+            ls_EQ6_m  = torch.mean(torch.square(EQ6_m));  self.history[22, i]  = ls_EQ6_m.item()
+            ls_Work_t = Work_t;                           self.history[23, i]  = ls_Work_t.item()
+            ls_BC1_t  = torch.mean(torch.square(BC1_t));  self.history[24, i]  = ls_BC1_t.item()
+            ls_BC2_t  = torch.mean(torch.square(BC2_t));  self.history[25, i]  = ls_BC2_t.item()
+            ls_BC3_t  = torch.mean(torch.square(BC3_t));  self.history[26, i]  = ls_BC3_t.item()
+            ls_BC4_t  = torch.mean(torch.square(BC4_t));  self.history[27, i]  = ls_BC4_t.item()
+            ls_PDE1_t = torch.mean(torch.square(PDE1_t)); self.history[28, i]  = ls_PDE1_t.item()
+            ls_EQ1_t  = torch.mean(torch.square(EQ1_t));  self.history[29, i]  = ls_EQ1_t.item()
+            ls_EQ2_t  = torch.mean(torch.square(EQ2_t));  self.history[30, i]  = ls_EQ2_t.item()
+            ls_EQ3_t  = torch.mean(torch.square(EQ3_t));  self.history[31, i]  = ls_EQ3_t.item()
+        
+            Loss = ls_Work_m + ls_BC1_m + ls_BC2_m + ls_BC3_m + ls_BC4_m + ls_BC5_m + ls_BC6_m + ls_BC7_m + ls_BC8_m + ls_BC9_m + ls_BC10_m + ls_BC11_m + ls_BC12_m + \
+                ls_PDE1_m + ls_PDE2_m + ls_PDE3_m + ls_EQ1_m + ls_EQ2_m + ls_EQ3_m + ls_EQ4_m + ls_EQ5_m + ls_EQ6_m + \
+                ls_Work_t + ls_BC1_t + ls_BC2_t + ls_BC3_t + ls_BC4_t + ls_PDE1_t + ls_EQ1_t + ls_EQ2_t + ls_EQ3_t + \
+                ls_u_x_FE + ls_u_y_FE + ls_u_z_FE + ls_sigma_x_FE + ls_sigma_y_FE + ls_sigma_z_FE + ls_sigma_xy_FE + ls_sigma_yz_FE + ls_sigma_xz_FE + ls_T_FE + ls_q_x_FE + ls_q_y_FE + ls_q_z_FE
             Loss.backward()
             optimizer.step()
-            # if i >= 4000 and i <= 20000: scheduler.step()
+            if i >= 4000 and i <= 20000: scheduler.step()
             self.history[0, i] = Loss.item()
             
             if (i + 1) % 100 == 0:
