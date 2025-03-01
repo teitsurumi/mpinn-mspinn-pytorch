@@ -84,6 +84,29 @@ Due to time constraints, the current thermoelastic version does not incorporate 
 
 We have also successfully optimized their computatin efficiency by reorganizing the code pipeline and data structure for model training.
 
+## Description of the Numerical Experiments
+
+### `test4_basic`
+
+Before conducting this numerical experiment, we developed a PyTorch replication of PINN based on the [PINN (TF1 ver.)](https://github.com/maziarraissi/PINNs). We tested this model on two structures: an elastic circular hole and a square structure. During these tests, we observed that the original PINN struggled to converge under certain conditions:
+
+1. When the Young's modulus ($E$) is very large, e.g., Steel<br> $\Rightarrow$ the order of magnititude of $u$, $\varepsilon$ and $\sigma$ differs greatly $\Rightarrow$ normalization
+
+2. When there is localized high gradients<br> $\Rightarrow$ adjust the NN structure and training logics
+
+<font color="#ff6b81">*Note:*</font> In 03/2024, Prof. Karniadakis' team introduced the Residual-Based Attention (RBA) mechanism to address this issue: [Residual-based attention in physics-informed neural networks](https://www.sciencedirect.com/science/article/pii/S0045782524000616).
+
+Building on these insights, we designed `(test group 3) test4`. We discovered that by carefully grouping the loss terms, we could avoid numerical instability during the early stages of training. This approach ensures that all loss terms converge properly. Without proper grouping, the loss tends to get stuck in a suboptimal local minimum.
+
+The `test4` experiment consists of two main components: `numerical_integration` and `test4`. The `numerical_integration` module prepares the necessary data for Delaunay integration, a key step in the process.
+
+### Key Improvements:
+- **Compared to the original PINN:** Our implementation achieves higher computational efficiency and better convergence.
+- **Compared to DEM and some weak-form methods:** Our approach captures finer details in the physical fields, particularly for $\sigma_y$ and $\varepsilon_y$.
+- Skipping pre-training stages can lead to visually rougher predictions in the final results.
+
+
+
 ---
 
 # Acknowledgment
