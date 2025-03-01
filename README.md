@@ -48,7 +48,7 @@ mpinn-mspinn-pytorch/
 - h5py 3.13.0
 - pandas 2.2.3
 
-`requirements.txt` will not be offered. Please install the correct PyTorch version https://pytorch.org/.
+`requirements.txt` will not be offered. Please install the PyTorch version https://pytorch.org/ accordingly.
 
 ---
 

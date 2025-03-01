@@ -157,7 +157,6 @@ sample_FE = FESample(
 )
 
 
-
 class TrainingUtils(nn.Module):
     def __init__(
         self, models: Dict[str, Functional],
@@ -213,6 +212,8 @@ class TrainingUtils(nn.Module):
     def func1(self, x, y, E, K):
         X = torch.hstack((x, y))
         Tn = self.Tn(X)
+        q_x_O = self.q_x_O(X)
+        q_y_O = self.q_y_O(X)
         T = Tn * x * (x - 1.0) + 1.0 - x
         gr_T_x = gradients(T, x)[0]
         gr_T_y = gradients(T, y)[0]
@@ -221,8 +222,11 @@ class TrainingUtils(nn.Module):
         
         u_xn = self.u_xn(X)
         u_yn = self.u_yn(X)
+        sig_x_O = self.sig_x_O(X)
+        sig_y_O = self.sig_y_O(X)
+        sig_xy_O = self.sig_xy_O(X)
         u_x = u_xn * x * (x - 1.0)
-        u_y = u_yn  * y * (y - 1.0)
+        u_y = u_yn * y * (y - 1.0)
         strain_x  = gradients(u_x, x)[0]
         strain_y  = gradients(u_y, y)[0]
         strain_xy = (gradients(u_x, y)[0] + gradients(u_y, x)[0]) * 0.5
@@ -241,27 +245,54 @@ class TrainingUtils(nn.Module):
         Work_e_b_m = torch.sum(self.M_bound_bottom*(-sigma_y * u_y - sigma_xy * u_x))/self.nb_b
         Work_ext_m = Work_e_r_m + Work_e_l_m + Work_e_t_m + Work_e_b_m
         Work_m = torch.square(Work_int_m - Work_ext_m)
+        
+        # PDE
+        PDE1_m = gradients(sigma_x, x)[0]  + gradients(sigma_xy, y)[0]
+        PDE2_m = gradients(sigma_xy, x)[0] + gradients(sigma_y, y)[0]
+        # CONECT
+        EQ1_m  = sig_x_O  - sigma_x
+        EQ2_m  = sig_y_O  - sigma_y
+        EQ3_m  = sig_xy_O - sigma_xy
         # Mechanical BCs 
         BC6_m  = (x==0.)*(sigma_xy)
+        BC8_m  = (x==0.)*(sig_xy_O)
         BC10_m = (x==1.)*(sigma_xy)
+        BC12_m = (x==1.)*(sig_xy_O)
         BC14_m  = (y==0.)*(sigma_xy)
+        BC16_m  = (y==0.)*(sig_xy_O)
         BC18_m  = (y==1.)*(sigma_xy)
+        BC20_m  = (y==1.)*(sig_xy_O)
 
         ##################### Thermal Governing Equation #####################
         Work_int_t = torch.sum(self.M_domain*(q_x * gr_T_x + q_y * gr_T_y))/self.nd
+        Work_e_r_t = torch.sum(self.M_bound_right*(q_x * T))/self.nb_r
         Work_e_l_t = torch.sum(self.M_bound_left*(-q_x * T))/self.nb_l
-        Work_ext_t = Work_e_l_t
+        Work_e_t_t = torch.sum(self.M_bound_top*(q_y * T))/self.nb_t
+        Work_e_b_t = torch.sum(self.M_bound_bottom*(-q_y * T))/self.nb_b
+        Work_ext_t = Work_e_r_t + Work_e_l_t + Work_e_t_t + Work_e_b_t
         Work_t = torch.square(Work_int_t - Work_ext_t)
+        # PDE
+        PDE1_t = gradients(q_x, x)[0] - gradients(q_y, y)[0]
+        # CONECT
+        EQ1_t  = q_x_O  - q_x
+        EQ2_t  = q_y_O  - q_y
         # Thermal BCs
         BC1_t  = (x==0.)*(T - 1)
         BC2_t  = (x==1.)*(T)
         BC5_t  = (y==0.)*(q_y)
+        BC6_t  = (y==0.)*(q_y_O)
         BC7_t = (y==1.)*(q_y)
+        BC8_t = (y==1.)*(q_y_O)
         
-        return Work_m, BC6_m, BC10_m, BC14_m, BC18_m, Work_t, BC1_t, BC2_t, BC5_t, BC7_t
+        return Work_m, PDE1_m, PDE2_m, EQ1_m, EQ2_m, EQ3_m, \
+            BC6_m, BC8_m, BC10_m, \
+            BC12_m, BC14_m, BC16_m, BC18_m, BC20_m, \
+            Work_t, PDE1_t, EQ1_t, EQ2_t, BC1_t, BC2_t, BC5_t, BC6_t, BC7_t, BC8_t
     def func1_FE(self, x, y, E, K):
         X = torch.hstack((x, y))
         Tn = self.Tn(X)
+        q_x_O = self.q_x_O(X)
+        q_y_O = self.q_y_O(X)
         T = Tn * x * (x - 1.0) + 1.0 - x
         gr_T_x = gradients(T, x)[0]
         gr_T_y = gradients(T, y)[0]
@@ -270,6 +301,9 @@ class TrainingUtils(nn.Module):
         
         u_xn = self.u_xn(X)
         u_yn = self.u_yn(X)
+        sig_x_O = self.sig_x_O(X)
+        sig_y_O = self.sig_y_O(X)
+        sig_xy_O = self.sig_xy_O(X)
         u_x = u_xn * x * (x - 1.0)
         u_y = u_yn  * y * (y - 1.0)
         strain_x  = gradients(u_x, x)[0]
@@ -280,83 +314,70 @@ class TrainingUtils(nn.Module):
         sigma_x   = (E/((1+nu)*(1-2*nu)))*((1-nu)*strain_x + nu*strain_y) - E*strain_T_x/(1-2*nu)
         sigma_y   = (E/((1+nu)*(1-2*nu)))*((1-nu)*strain_y + nu*strain_x) - E*strain_T_y/(1-2*nu)
         sigma_xy  = (E/((1+nu)*(1-2*nu)))*strain_xy*(1-2*nu)
-        return u_x, u_y, sigma_x, sigma_y, sigma_xy, T, q_x, q_y
+        return u_x, u_y, sig_x_O, sig_y_O, sig_xy_O, sigma_x, sigma_y, sigma_xy, T, q_x, q_y, q_x_O, q_y_O
     def func1_train(self):
         optimizer = torch.optim.Adam(itertools.chain(self.Tn.parameters(), self.q_x_O.parameters(), self.q_y_O.parameters(), self.u_xn.parameters(), self.u_yn.parameters(), self.sig_x_O.parameters(), self.sig_y_O.parameters(), self.sig_xy_O.parameters()), lr=4e-3)
         scheduler = torch.optim.lr_scheduler.StepLR(optimizer=optimizer, step_size=2500, gamma=0.5)
         for i in range(self.cfg.iters):
             ls_epoch = []
             optimizer.zero_grad()
-            Work_m, BC6_m, BC10_m, BC14_m, BC18_m, Work_t, BC1_t, BC2_t, BC5_t, BC7_t = self.func1(self.x_train, self.y_train, self.E, self.K)
+            Work_m, PDE1_m, PDE2_m, EQ1_m, EQ2_m, EQ3_m, \
+                BC6_m, BC8_m, BC10_m, \
+                BC12_m, BC14_m, BC16_m, BC18_m, BC20_m, \
+                Work_t, PDE1_t, EQ1_t, EQ2_t, BC1_t, BC2_t, BC5_t, BC6_t, BC7_t, BC8_t = self.func1(self.x_train, self.y_train, self.E, self.K)
             # FE Loss
-            u_x_FE_, u_y_FE_, sigma_x_FE_, sigma_y_FE_, sigma_xy_FE_, T_FE_, q_x_FE_, q_y_FE_ = self.func1_FE(self.x_fem, self.y_fem, self.E_FE, self.K_FE)
+            u_x_FE_, u_y_FE_, sig_x_O_FE_, sig_y_O_FE_, sig_xy_O_FE_, sigma_x_FE_, sigma_y_FE_, sigma_xy_FE_, T_FE_, q_x_FE_, q_y_FE_, q_x_O_FE_, q_y_O_FE_ = self.func1_FE(self.x_fem, self.y_fem, self.E_FE, self.K_FE)
             ls_u_x_FE = self.mse(u_x_FE_, self.u_x_FE)
             ls_u_y_FE = self.mse(u_y_FE_, self.u_y_FE)
             ls_T_FE = self.mse(T_FE_, self.T_FE)
-            ls_q_x_FE = self.mse(q_x_FE_, self.q_x_FE)
-            ls_q_y_FE = self.mse(q_y_FE_, self.q_y_FE)
+            ls_q_x_FE = self.mse(q_x_FE_, self.q_x_FE) + self.mse(q_x_O_FE_, self.q_x_FE)
+            ls_q_y_FE = self.mse(q_y_FE_, self.q_y_FE) + self.mse(q_y_O_FE_, self.q_y_FE)
             ls_sigma_x_FE = self.mse(sigma_x_FE_, self.sigma_x_FE)
             ls_sigma_y_FE = self.mse(sigma_y_FE_, self.sigma_y_FE)
             ls_sigma_xy_FE = self.mse(sigma_xy_FE_, self.sigma_xy_FE)
             # Eq Loss
+            # ls_Work_m = torch.mean(torch.square(Work_m)); ls_epoch.append(ls_Work_m.item())
             ls_Work_m = Work_m; ls_epoch.append(ls_Work_m.item())
+            ls_PDE1_m = torch.mean(torch.square(PDE1_m)); ls_epoch.append(ls_PDE1_m.item())
+            ls_PDE2_m = torch.mean(torch.square(PDE2_m)); ls_epoch.append(ls_PDE2_m.item())
+            ls_EQ1_m = torch.mean(torch.square(EQ1_m)); ls_epoch.append(ls_EQ1_m.item())
+            ls_EQ2_m = torch.mean(torch.square(EQ2_m)); ls_epoch.append(ls_EQ2_m.item())
+            ls_EQ3_m = torch.mean(torch.square(EQ3_m)); ls_epoch.append(ls_EQ3_m.item())
             ls_BC6_m = torch.mean(torch.square(BC6_m)); ls_epoch.append(ls_BC6_m.item())
+            ls_BC8_m = torch.mean(torch.square(BC8_m)); ls_epoch.append(ls_BC8_m.item())
             ls_BC10_m = torch.mean(torch.square(BC10_m)); ls_epoch.append(ls_BC10_m.item())
+            ls_BC12_m = torch.mean(torch.square(BC12_m)); ls_epoch.append(ls_BC12_m.item())
             ls_BC14_m = torch.mean(torch.square(BC14_m)); ls_epoch.append(ls_BC14_m.item())
+            ls_BC16_m = torch.mean(torch.square(BC16_m)); ls_epoch.append(ls_BC16_m.item())
             ls_BC18_m = torch.mean(torch.square(BC18_m)); ls_epoch.append(ls_BC18_m.item())
+            ls_BC20_m = torch.mean(torch.square(BC20_m)); ls_epoch.append(ls_BC20_m.item())
             ls_Work_t = Work_t; ls_epoch.append(ls_Work_t.item())
-            ls_BC1_t = torch.mean(torch.square(BC1_t)); ls_epoch.append(ls_BC1_t.item())     # unused in Loss
-            ls_BC2_t = torch.mean(torch.square(BC2_t)); ls_epoch.append(ls_BC2_t.item())     # unused in Loss
+            ls_PDE1_t = torch.mean(torch.square(PDE1_t)); ls_epoch.append(ls_PDE1_t.item())
+            ls_EQ1_t = torch.mean(torch.square(EQ1_t)); ls_epoch.append(ls_EQ1_t.item())
+            ls_EQ2_t = torch.mean(torch.square(EQ2_t)); ls_epoch.append(ls_EQ2_t.item())
+            ls_BC1_t = torch.mean(torch.square(BC1_t)); ls_epoch.append(ls_BC1_t.item())
+            ls_BC2_t = torch.mean(torch.square(BC2_t)); ls_epoch.append(ls_BC2_t.item())
             ls_BC5_t = torch.mean(torch.square(BC5_t)); ls_epoch.append(ls_BC5_t.item())
+            ls_BC6_t = torch.mean(torch.square(BC6_t)); ls_epoch.append(ls_BC6_t.item())
             ls_BC7_t = torch.mean(torch.square(BC7_t)); ls_epoch.append(ls_BC7_t.item())
+            ls_BC8_t = torch.mean(torch.square(BC8_t)); ls_epoch.append(ls_BC8_t.item())
             
-            if i <= 1000:
-                Loss = ls_Work_m + ls_BC6_m + ls_BC10_m + ls_BC14_m + ls_BC18_m + \
-                    ls_Work_t + ls_BC5_t + ls_BC7_t + \
-                    ls_u_x_FE + ls_u_y_FE + ls_T_FE + ls_q_x_FE + ls_q_y_FE + ls_sigma_x_FE + ls_sigma_y_FE + ls_sigma_xy_FE
-            elif i <= 6000:
-                Loss = ls_u_x_FE + ls_u_y_FE + ls_T_FE + ls_q_x_FE + ls_q_y_FE + ls_sigma_x_FE + ls_sigma_y_FE + ls_sigma_xy_FE
-            elif i <= 10000:
-                Loss = ls_Work_m + ls_BC6_m + ls_BC10_m + ls_BC14_m + ls_BC18_m + \
-                    ls_Work_t + ls_BC5_t + ls_BC7_t + \
-                    ls_u_x_FE + ls_u_y_FE + ls_T_FE + ls_q_x_FE + ls_q_y_FE + ls_sigma_x_FE + ls_sigma_y_FE + ls_sigma_xy_FE
-            elif i <= 14000:
-                if i == 10000+1:
-                    new_lr = 5e-4
-                    for param_group in optimizer.param_groups:
-                        param_group['lr'] = new_lr
-                Loss = ls_u_x_FE + ls_u_y_FE + ls_T_FE + ls_q_x_FE + ls_q_y_FE + ls_sigma_x_FE + ls_sigma_y_FE + ls_sigma_xy_FE
-            elif i <= 20000:
-                if i == 16000+1:
-                    new_lr = 6e-4
-                    for param_group in optimizer.param_groups:
-                        param_group['lr'] = new_lr
-                Loss = ls_Work_m + ls_BC6_m + ls_BC10_m + ls_BC14_m + ls_BC18_m + \
-                    ls_Work_t + ls_BC5_t + ls_BC7_t + \
-                    ls_u_x_FE + ls_u_y_FE + ls_T_FE + ls_q_x_FE + ls_q_y_FE + ls_sigma_x_FE + ls_sigma_y_FE + ls_sigma_xy_FE
-            elif i <= 22000:
-                if i == 20000+1:
-                    new_lr = 1e-4
-                    for param_group in optimizer.param_groups:
-                        param_group['lr'] = new_lr
-                Loss = ls_BC6_m + ls_BC10_m + ls_BC14_m + ls_BC18_m + \
-                    ls_BC5_t + ls_BC7_t + \
-                    ls_u_x_FE + ls_u_y_FE + ls_T_FE + ls_q_x_FE + ls_q_y_FE + ls_sigma_x_FE + ls_sigma_y_FE + ls_sigma_xy_FE
-            else:
-                Loss = ls_Work_m + ls_BC6_m + ls_BC10_m + ls_BC14_m + ls_BC18_m + \
-                    ls_Work_t + ls_BC5_t + ls_BC7_t + \
-                    ls_u_x_FE + ls_u_y_FE + ls_T_FE + ls_q_x_FE + ls_q_y_FE + ls_sigma_x_FE + ls_sigma_y_FE + ls_sigma_xy_FE
+            Loss = ls_Work_m + ls_EQ1_m + ls_EQ2_m + ls_EQ3_m + \
+                ls_BC6_m + ls_BC8_m + ls_BC10_m + \
+                ls_BC12_m + ls_BC14_m + ls_BC16_m + ls_BC18_m + ls_BC20_m + \
+                ls_Work_t + ls_EQ1_t + ls_EQ2_t + \
+                ls_BC5_t + ls_BC6_t + ls_BC7_t + ls_BC8_t + \
+                ls_u_x_FE + ls_u_y_FE + ls_T_FE + ls_q_x_FE + ls_q_y_FE + ls_sigma_x_FE + ls_sigma_y_FE + ls_sigma_xy_FE
             Loss.backward()
             optimizer.step()
-            # if i >= 4000 and i <= 20000: scheduler.step()
-            
+            if i >= 4000 and i <= 20000: scheduler.step()
             self.history[self.cfg.loss_terms[0]].append(Loss.item())
             for loss_idx in range(1, len(self.cfg.loss_terms)):
                 self.history[self.cfg.loss_terms[loss_idx]].append(ls_epoch[loss_idx-1])
             if (i + 1) % 50 == 0:
                 print("iter:", i+1, " Loss:", Loss)
-                print(f"Work_m: {ls_epoch[0]:.6e}", f"BC6_m: {ls_epoch[1]:.6e}", f"BC10_m: {ls_epoch[2]:.6e}", f"BC14_m: {ls_epoch[3]:.6e}", f"BC18_m: {ls_epoch[4]:.6e}")
-                print(f"Work_t: {ls_epoch[5]:.6e}", f"BC1_t: {ls_epoch[6]:.6e}", f"BC2_t: {ls_epoch[7]:.6e}", f"BC5_t: {ls_epoch[8]:.6e}", f"BC7_t: {ls_epoch[9]:.6e}")
+                print(ls_Work_m, ls_PDE1_m, ls_PDE2_m, ls_EQ1_m, ls_EQ2_m, ls_EQ3_m, ls_BC6_m, ls_BC8_m, ls_BC10_m, ls_BC12_m, ls_BC14_m, ls_BC16_m, ls_BC18_m, ls_BC20_m, ls_Work_t, ls_PDE1_t, ls_EQ1_t, ls_EQ2_t, ls_BC5_t, ls_BC6_t, ls_BC7_t, ls_BC8_t)
+
 
 
 
