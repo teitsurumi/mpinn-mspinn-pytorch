@@ -17,7 +17,7 @@ Clone the `main` branch **(code only)**:
 git clone -b main https://github.com/teitsurumi/mpinn-mspinn-pytorch.git
 ```
 
-If the raw dataset is needed, please clone the `data` branch:
+If the raw dataset is needed, please clone the `data` branch (about 18.1 M):
 
 ```sh
 cd mpinn-mspinn-pytorch
@@ -75,6 +75,8 @@ We provide a PyTorch implementation with enhanced computational efficiency:
 - Restructured the training pipeline
 
 ## Some compromise
+
+Note that `test23` is not fully optimized. For better organized code, please refer to `test22`.
 
 Due to time constraints, the current thermoelastic version does not incorporate more precise numerical integration methods. However, we have implemented advanced integration techniques in other versions of our framework:
 - **Elastic version**: Utilized Delaunay integration for improved accuracy.
