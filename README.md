@@ -7,6 +7,8 @@ A PyTorch implementation of mPINN &amp; MsPINN
   - [Code](https://github.com/phyml4e/pinns)
 - MsPINN
 
+This repository is still under slow development.
+
 # Usage
 
 ## Clone
