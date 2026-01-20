@@ -9,7 +9,6 @@ A PyTorch implementation of mPINN &amp; MsPINN
 **@TODO**
 - **Bugfixes & re-conceptualization:** The methodology is being updated based on recent reviews.
 - **Software design:** A PySide6-based playground with GUI is being designed for debugging multi-stage training. The general framework is complete, but many details still require polishing.
- 
 
 - mPINN
   - [Paper1](https://www.sciencedirect.com/science/article/abs/pii/S0045782522005722)
