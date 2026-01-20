@@ -1,13 +1,22 @@
 # mpinn-mspinn-pytorch
 A PyTorch implementation of mPINN &amp; MsPINN
 
+> [!WARNING]  
+> **Deprecation Notice:** This version is part of our first major revision. Some code may be incorrect or outdated.
+>
+> The main author is currently occupied with several deadlines. Updates are expected within approximately six months.
+
+**@TODO**
+- **Bugfixes & re-conceptualization:** The methodology is being updated based on recent reviews.
+- **Software design:** A PySide6-based playground with GUI is being designed for debugging multi-stage training. The general framework is complete, but many details still require polishing.
+ 
+
 - mPINN
   - [Paper1](https://www.sciencedirect.com/science/article/abs/pii/S0045782522005722)
   - [Paper2](https://onlinelibrary.wiley.com/doi/full/10.1002/nme.7388)
   - [Code](https://github.com/phyml4e/pinns)
 - MsPINN
-
-This repository is still under slow development.
+  - [Our paper](https://www.sciencedirect.com/science/article/abs/pii/S0045782525005250)
 
 # Usage
 
