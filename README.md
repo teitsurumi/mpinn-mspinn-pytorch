@@ -1,5 +1,5 @@
 # mpinn-mspinn-pytorch
-A PyTorch implementation of mPINN &amp; MsPINN
+A PyTorch implementation of mixed PINN (mPINN) and MsPINN
 
 > [!WARNING]  
 > **Deprecation Notice:** This version is part of our first major revision. Some code may be incorrect or outdated.
@@ -10,7 +10,7 @@ A PyTorch implementation of mPINN &amp; MsPINN
 - **Bugfixes & re-conceptualization:** The methodology is being updated based on recent reviews.
 - **Software design:** A PySide6-based playground with GUI is being designed for debugging multi-stage training. The general framework is complete, but many details still require polishing.
 
-- mPINN
+- mixed PINN
   - [Paper1](https://www.sciencedirect.com/science/article/abs/pii/S0045782522005722)
   - [Paper2](https://onlinelibrary.wiley.com/doi/full/10.1002/nme.7388)
   - [Code](https://github.com/phyml4e/pinns)
@@ -70,7 +70,7 @@ The `requirements.txt` file is not provided here due to varying CUDA support. Pl
 
 Our method leverages incomplete physics information during the initial stages to enhance convergence, particularly in scenarios where physical fields exhibit **local sharp gradients** . In such cases, unsupervised methods often converge to incorrect local minima. By gradually incorporating complete physics information in the final stages, our approach achieves more robust and accurate solutions.
 
-Compared to the mPINN framework, which introduces correction terms (`_O` terms) to approximate higher-order equations and binds them to computed higher-order terms -- thereby **relaxing the constraints of higher-order equations** -- our framework offers improvements in efficiency and stability. Specifically, our method:
+Compared to the mixed PINN framework, which introduces correction terms (`_O` terms) to approximate higher-order equations and binds them to computed higher-order terms -- thereby **relaxing the constraints of higher-order equations** -- our framework offers improvements in efficiency and stability. Specifically, our method:
 - Relaxes constraints using incomplete physics information during the initial stages to avoid numerical instability.
 - Eliminates the need for correction terms, reducing the number of terms from 13 $\to$ 4 in 3-dimensional cases.
 - Separates the `samplefile` (FEM samples), `trainfile` (collocation points) and `testfile` (test samples).
@@ -125,7 +125,7 @@ The `test4` experiment consists of two main components: `numerical_integration` 
 
 We would like to express our gratitude to the following open-source repositories:
 - [PINN](https://github.com/maziarraissi/PINNs) (TF1 version. Currently they seem to have TF2, PyTorch and Jax versions.)
-- [mPINN](https://github.com/phyml4e/pinns) (SciANN version)
+- [mixed PINN](https://github.com/phyml4e/pinns) (SciANN version)
 - [DEM](https://github.com/MinhNguyenIKM/dem_hyperelasticity) (PyTorch version)
 
 In this repository, we provide **a PyTorch implementation** and a **Multi-stage optimization** inspired by the above works.
