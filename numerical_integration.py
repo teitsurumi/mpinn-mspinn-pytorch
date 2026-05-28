@@ -108,16 +108,21 @@ def gen_points():
 
 
 if __name__ == '__main__':
+    # def __network():
+    #     """test nn"""
+    #     net = torch.nn.Sequential()
+    #     net.add_module('Linear_layer_1', torch.nn.Linear(2, 64))
+    #     net.add_module('Tanh_layer_1', torch.nn.Tanh())
+    #     for num in range(2, 6):
+    #         net.add_module('Linear_layer_%d' % (num), torch.nn.Linear(64, 64))
+    #         net.add_module('Tanh_layer_%d' % (num), torch.nn.Tanh())
+    #     net.add_module('Linear_layer_final', torch.nn.Linear(64, 1))
+    #     net = net.cuda("cuda:0")
+    #     return net
     def __network():
-        """test nn"""
-        net = torch.nn.Sequential()
-        net.add_module('Linear_layer_1', torch.nn.Linear(2, 64))
-        net.add_module('Tanh_layer_1', torch.nn.Tanh())
-        for num in range(2, 6):
-            net.add_module('Linear_layer_%d' % (num), torch.nn.Linear(64, 64))
-            net.add_module('Tanh_layer_%d' % (num), torch.nn.Tanh())
-        net.add_module('Linear_layer_final', torch.nn.Linear(64, 1))
-        net = net.cuda("cuda:0")
+        """mocked output"""
+        def net(X: torch.Tensor):
+            return torch.ones_like(X[:, 0:1]).to(X.device)
         return net
     def to_numpy(input):
         if isinstance(input, torch.Tensor):
@@ -132,13 +137,14 @@ if __name__ == '__main__':
     
     delaunay_triangles_filtered = np.array(delaunay_triangles_filtered)
     delaunay_tri_area = np.array(delaunay_tri_area)
-    ################ SAVE AS VERTICES ################
-    np.savez(
-        "./data/shape6_delaunay2.npz",
-        delaunay_triangles_filtered=delaunay_triangles_filtered,
-        delaunay_tri_area=delaunay_tri_area
-    )
+    # ################ SAVE AS VERTICES ################
+    # np.savez(
+    #     "./data/shape6_delaunay2.npz",
+    #     delaunay_triangles_filtered=delaunay_triangles_filtered,
+    #     delaunay_tri_area=delaunay_tri_area
+    # )
 
+    ################ PREVIEW MESH ################
     plt.figure(0, (6,6))
     plt.triplot(vertex_points[:,0], vertex_points[:,1], vertexes_filtered)
     plt.show()
@@ -156,11 +162,16 @@ if __name__ == '__main__':
     func = __network()
     func_value = func(torch.hstack((vertexes_x, vertexes_y))).to(device)
     
-    func_value_mean = torch.tensor(
-                        np.zeros(int(xx.shape[0]/3)),
-                        dtype=torch.float32, requires_grad=True
-                    ).reshape((int(xx.shape[0]/3), 1)).to(device)
-    for i in range(int(xx.shape[0]/3)):
-        func_value_mean[i] = torch.sum(func_value[3*i:3*(i+1)])
+    # CAUTION: For computational graphs, assigning values during training is an illegal operation.
+    # func_value_mean = torch.tensor(
+    #                     np.zeros(int(xx.shape[0]/3)),
+    #                     dtype=torch.float32, requires_grad=True
+    #                 ).reshape((int(xx.shape[0]/3), 1)).to(device)
+    # for i in range(int(xx.shape[0]/3)):
+    #     func_value_mean[i] = torch.sum(func_value[3*i:3*(i+1)]) / 3.0
+    # This must be alternated by the method below:
+    func_value_mean = torch.sum(func_value.view((int(func_value.shape[0]/3), 3)), 1, keepdim=True) / 3
     
     print(to_numpy(torch.sum(func_value_mean * delaunay_tri_area)))
+    print(0.6**2 - np.pi * 0.02 * 0.2 * 0.25)
+    print(np.abs((0.6**2 - np.pi * 0.02 * 0.2 * 0.25) - to_numpy(torch.sum(func_value_mean * delaunay_tri_area))) / (0.6**2 - np.pi * 0.02 * 0.2 * 0.25) * 100, "%")

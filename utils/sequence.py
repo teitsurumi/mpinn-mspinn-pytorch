@@ -2,9 +2,7 @@
 @author: tsurumitei
 @email: tsurumitei@foxmail.com
 
-generate the sequence
-
-used to generate structural mesh for the elliptical structure
+Generate sequence with increased intervals, for structured mesh of elliptical structures.
 """
 
 import numpy as np
