@@ -55,7 +55,7 @@ If the raw dataset is needed, please clone the `data` branch (about 18.1 Mb):
 
 ```sh
 git fetch origin data
-git checkout origin/data -- data_thermoelastic
+git checkout origin/data -- data_thermomechanic
 ```
 
 (Another dataset containing 110,323 nodes is too large for this repo; it will be made available upon request.)
@@ -66,7 +66,7 @@ After downloading both branches, your project directory should look like this:
 mpinn-mspinn-pytorch/
 ├── LICENSE
 ├── README.md
-├── data_thermoelastic/  # Data from the `data` branch
+├── data_thermomechanic/  # Data from the `data` branch
 ├── utils/
 │   └── <other files>
 ├── ax_xxx.py (Python file: appendix)

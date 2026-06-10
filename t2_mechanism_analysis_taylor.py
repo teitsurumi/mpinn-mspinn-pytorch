@@ -103,7 +103,6 @@ class pinn(nn.Module):
 
     # ----------------------- BEGIN NETWORKS -----------------------
     def __network(self):
-        """单输出网络"""
         net = nn.Sequential()
         net.add_module('Linear_layer_1', nn.Linear(1, 15))
         net.add_module('Tanh_layer_1', nn.Tanh())
