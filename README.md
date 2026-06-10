@@ -1,15 +1,36 @@
 # mpinn-mspinn-pytorch
-A PyTorch implementation of mixed PINN (mPINN) and MsPINN
 
-> [!WARNING]  
-> **Deprecation Notice:** This version is part of our first major revision. Some code may be incorrect or outdated.
->
-> The main author is currently occupied with several deadlines. Updates are expected within approximately six months.
+A PyTorch implementation of mixed PINN (mPINN) and Multi-stage PINN (MsPINN)
+
+# Features
+
+- Dive into individual loss terms to reveal term entangling in tensor-type PDE systems
+- Mechanism analysis: A simple Taylor-expansion-mocked PINN
+- Development of multi-stage training
+- Energy-based formulation for mechanical problems: PDE order reduction and convergence enhancement
+- Thermo-mechanical inclusion problems: implementation of both mPINN & MsPINN
+- Ablation studies
+- Analysis from an optimization landscape perspective
+
+**Key Features & Highlights:**
+
+- **Pure PyTorch Implementation**
+- **Fine-grained Loss Visualization:** Component-wise tracking and visualization of individual loss terms in tensor-type PDE systems to explicitly uncover gradient entanglement and conflicts.
+- **Multi-stage Training Paradigm**
+- Theoretical principles for relaxing higher-order constraints
+  - Loss term coupling during training for well-posed BVPs
+  - Methodological parallels between mPINN and MsPINN
+- Optimization landscape visualization (tracking of singular value spectra and Frobenius norms during training)
+- 2D energy computation via Delaunay triangulation integration
+
+> [!WARNING]
+> The main branch of this repo is currently being updated. The old version before our first revision can be found on the branch deprecated/main.
 
 **@TODO**
 - **Bugfixes & re-conceptualization:** The methodology is being updated based on recent reviews.
 - **Software design:** A PySide6-based playground with GUI is being designed for debugging multi-stage training. The general framework is complete, but many details still require polishing.
 
+**Related links**
 - mixed PINN
   - [Paper1](https://www.sciencedirect.com/science/article/abs/pii/S0045782522005722)
   - [Paper2](https://onlinelibrary.wiley.com/doi/full/10.1002/nme.7388)
@@ -17,25 +38,27 @@ A PyTorch implementation of mixed PINN (mPINN) and MsPINN
 - MsPINN
   - [Our paper](https://www.sciencedirect.com/science/article/abs/pii/S0045782525005250)
 
-# Usage
+---
+
+# Quick Start
 
 ## Clone
 
-Choose somewhere safe to store the code, then clone the `main` branch **(code only)**:
+Clone the `main` branch **(code only)**:
 
 ```sh
 git clone -b main https://github.com/teitsurumi/mpinn-mspinn-pytorch.git
 cd mpinn-mspinn-pytorch
 ```
 
-If the raw dataset is needed, please clone the `data` branch (about 18.1 M):
+If the raw dataset is needed, please clone the `data` branch (about 18.1 Mb):
 
 ```sh
 git fetch origin data
 git checkout origin/data -- data_thermoelastic
 ```
 
-(Another dataset containing 110,323 nodes is too large to include here; it will be made available upon request.)
+(Another dataset containing 110,323 nodes is too large for this repo; it will be made available upon request.)
 
 After downloading both branches, your project directory should look like this:
 
@@ -46,6 +69,8 @@ mpinn-mspinn-pytorch/
 ├── data_thermoelastic/  # Data from the `data` branch
 ├── utils/
 │   └── <other files>
+├── ax_xxx.py (Python file: appendix)
+├── tx_xxx.py (Python file: test cases)
 └── <other files>
 ```
 
@@ -64,60 +89,21 @@ The `requirements.txt` file is not provided here due to varying CUDA support. Pl
 
 ---
 
-# Description
+# 1. Diving into individual loss terms
 
-## Introduction
+@TODO
 
-Our method leverages incomplete physics information during the initial stages to enhance convergence, particularly in scenarios where physical fields exhibit **local sharp gradients** . In such cases, unsupervised methods often converge to incorrect local minima. By gradually incorporating complete physics information in the final stages, our approach achieves more robust and accurate solutions.
+# 2. Mechanism analysis: A simple Taylor-expansion-mocked PINN
 
-Compared to the mixed PINN framework, which introduces correction terms (`_O` terms) to approximate higher-order equations and binds them to computed higher-order terms -- thereby **relaxing the constraints of higher-order equations** -- our framework offers improvements in efficiency and stability. Specifically, our method:
-- Relaxes constraints using incomplete physics information during the initial stages to avoid numerical instability.
-- Eliminates the need for correction terms, reducing the number of terms from 13 $\to$ 4 in 3-dimensional cases.
-- Separates the `samplefile` (FEM samples), `trainfile` (collocation points) and `testfile` (test samples).
+Run the script: `t2_mechanism_analysis_taylor.py`
 
-## Code optimization
+By comparing the first 1,500 training steps between the `order2` and `order3` configurations, a clear discrepancy emerges. Although a higher-order Taylor expansion mathematically yields a superior approximation over a given interval, the `order3` case proves significantly more difficult to optimize numerically.
 
-We provide a PyTorch implementation with enhanced computational efficiency:
-- Reorganized code structure
-  - Streamlined configuration, sampling, and dataset handling
-- Improved sampling & masking strategy (`test22`)
-  - Replaced random sampling with Latin Hypercube Sampling (LHS) for more uniform and representative point distribution
-  - Implemented mask generation using logical computations
-  - for better readability :)
-- Restructured the training pipeline
+Visualizing each individual loss component within the `order3` total loss reveals the underlying dynamics:
+- Higher-order derivative terms themselves are harder to converge.
+- Higher-order terms disrupt the convergence of other loss components.
 
-## Some compromise
-
-Note that `test23` is not fully optimized. For better organized code, please refer to `test22`.
-
-Due to time constraints, the current thermoelastic version does not incorporate more precise numerical integration methods. However, we have implemented advanced integration techniques in other versions of our framework:
-- **Elastic version**: Utilized Delaunay integration for improved accuracy.
-- <font color="#b2bec3">Upcoming</font> **hp-VPINN PyTorch version**: Developed Gaussian integration to further enhance precision.
-
-We have also successfully optimized their computatin efficiency by reorganizing the code pipeline and data structure for model training.
-
-## Description of the Numerical Experiments
-
-### `test4_basic`
-
-Before conducting this numerical experiment, we developed a PyTorch replication of PINN based on the [PINN (TF1 ver.)](https://github.com/maziarraissi/PINNs). We tested this model on two structures: an elastic circular hole and a square structure. During these tests, we observed that the original PINN struggled to converge under certain conditions:
-
-1. When the Young's modulus ($E$) is very large, e.g., Steel<br> $\Rightarrow$ the order of magnititude of $u$, $\varepsilon$ and $\sigma$ differs greatly $\Rightarrow$ normalization
-
-2. When there is localized high gradients<br> $\Rightarrow$ adjust the NN structure and training logics
-
-<font color="#ff6b81">*Note:*</font> In 03/2024, Prof. Karniadakis' team introduced the Residual-Based Attention (RBA) mechanism to address this issue: [Residual-based attention in physics-informed neural networks](https://www.sciencedirect.com/science/article/pii/S0045782524000616).
-
-Building on these insights, we designed `(test group 3) test4`. We discovered that by carefully grouping the loss terms, we could avoid numerical instability during the early stages of training. This approach ensures that all loss terms converge properly. Without proper grouping, the loss tends to get stuck in a suboptimal local minimum.
-
-The `test4` experiment consists of two main components: `numerical_integration` and `test4`. The `numerical_integration` module prepares the necessary data for Delaunay integration, a key step in the process.
-
-### Key Improvements:
-- **Compared to the original PINN:** Our implementation achieves higher computational efficiency and better convergence.
-- **Compared to DEM and some weak-form methods:** Our approach captures finer details in the physical fields, particularly for $\sigma_y$ and $\varepsilon_y$.
-- Skipping pre-training stages can lead to visually rougher predictions in the final results.
-
-
+This observation highlights a challenge in multi-objective optimization for PINNs: loss term balancing. Actually, [Wang et al., 2022](https://www.sciencedirect.com/science/article/pii/S002199912100663X) analyzed this using the NTK, and [Anagnostopoulos et al., 2024](https://www.sciencedirect.com/science/article/pii/S0045782524000616) proposed Residual-based Attention for pointwise weighting. However, these methods do not decompose the physics loss into individual terms, nor do they account for the differential order of the loss terms.
 
 ---
 
