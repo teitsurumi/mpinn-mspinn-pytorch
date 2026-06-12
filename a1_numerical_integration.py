@@ -151,9 +151,9 @@ if __name__ == '__main__':
     # )
 
     ################ PREVIEW MESH ################
-    plt.figure(0, (6,6))
-    plt.triplot(vertex_points[:,0], vertex_points[:,1], vertexes_filtered)
-    plt.show()
+    # plt.figure(0, (6,6))
+    # plt.triplot(vertex_points[:,0], vertex_points[:,1], vertexes_filtered)
+    # plt.show()
 
     delaunay_triangles_filtered = np.array(delaunay_triangles_filtered)
     delaunay_triangles_filtered = delaunay_triangles_filtered.reshape((delaunay_triangles_filtered.shape[0] * 3, 2))
@@ -176,6 +176,9 @@ if __name__ == '__main__':
     # for i in range(int(xx.shape[0]/3)):
     #     func_value_mean[i] = torch.sum(func_value[3*i:3*(i+1)]) / 3.0
     # This must be alternated by the method below:
+    # func_value_mean = torch.sum(func_value.view((int(func_value.shape[0]/3), 3)), 1) / 3
+    # func_value_mean = func_value_mean.reshape((func_value_mean.shape[0], 1))
+    # OR
     func_value_mean = torch.sum(func_value.view((int(func_value.shape[0]/3), 3)), 1, keepdim=True) / 3
     
     print(to_numpy(torch.sum(func_value_mean * delaunay_tri_area)))
